@@ -17,11 +17,13 @@ const Signup = async (req, res) => {
     }
     const user = await prisma.user.create({
       data: { username, password: hashed, email },
+      omit: { password: true },
     });
 
     res.status(200).json({
       data: {
         user,
+        omit: { password: true },
       },
       message: "account have been created",
     });
@@ -33,23 +35,27 @@ const Signup = async (req, res) => {
 
 const login = async (req, res) => {
   const { email, password } = req.body;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-  });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
 
-  if (!user) {
-    return res.status(401).json({ message: "Invalid email or password" });
+    const passwordMatches = await bcrypt.compare(password, user.password);
+
+    if (!passwordMatches) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    generate(user.id, res);
+    return res.status(200).json({ message: "Login successful" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
   }
-
-  const passwordMatches = await bcrypt.compare(password, user.password);
-
-  if (!passwordMatches) {
-    return res.status(401).json({ message: "Invalid email or password" });
-  }
-
-  const token = generate(user.id);
-  return res.status(200).json({ token, message: "Login successful" });
 };
 
 export { Signup, login };
